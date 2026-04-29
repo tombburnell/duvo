@@ -6,6 +6,10 @@ COPY package.json package-lock.json* ./
 RUN npm ci
 
 COPY . .
+
+# Empty `public/` is often not present in Git clones; Next + runner COPY still need the path.
+RUN mkdir -p public
+
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
