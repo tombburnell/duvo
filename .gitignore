@@ -1,0 +1,9 @@
+# Local environment — never commit secrets (e.g. ANTHROPIC_API_KEY)
+.env
+.env.*
+!.env.example
+
+# Dependencies and build output
+node_modules/
+.next/
+.cache/
