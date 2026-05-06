@@ -7,3 +7,7 @@
 node_modules/
 .next/
 .cache/
+
+# Demo agent downloads
+apps/web/public/downloads/*
+!apps/web/public/downloads/.gitkeep

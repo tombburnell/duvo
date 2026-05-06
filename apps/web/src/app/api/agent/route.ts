@@ -1,11 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { runInstructions } from "@/lib/agent/runInstructions";
+import { isValidAgentRunId } from "@/lib/agent/traceEvents";
 
 export const runtime = "nodejs";
 
 interface AgentRequestBody {
   instructions: string;
+  runId?: string;
 }
 
 interface AgentSuccessResponse {
@@ -22,7 +24,12 @@ function isAgentRequestBody(value: unknown): value is AgentRequestBody {
     return false;
   }
 
-  return typeof (value as Partial<AgentRequestBody>).instructions === "string";
+  const candidate = value as Partial<AgentRequestBody>;
+
+  return (
+    typeof candidate.instructions === "string" &&
+    (candidate.runId === undefined || typeof candidate.runId === "string")
+  );
 }
 
 export async function POST(
@@ -49,6 +56,7 @@ export async function POST(
   }
 
   const instructions = body.instructions.trim();
+  const runId = body.runId?.trim();
 
   if (!instructions) {
     return NextResponse.json(
@@ -57,8 +65,12 @@ export async function POST(
     );
   }
 
+  if (runId && !isValidAgentRunId(runId)) {
+    return NextResponse.json({ error: "Run id is invalid." }, { status: 400 });
+  }
+
   try {
-    const result = await runInstructions(instructions);
+    const result = await runInstructions(instructions, { runId });
 
     return NextResponse.json(result);
   } catch (error) {

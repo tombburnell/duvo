@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, KeyboardEvent, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -23,11 +23,62 @@ interface AgentErrorResponse {
 }
 
 type AgentResponse = AgentSuccessResponse | AgentErrorResponse;
+type AgentTraceEventType = "lifecycle" | "tool" | "reasoning" | "error";
+
+interface AgentTraceEvent {
+  createdAt: string;
+  message: string;
+  payload?: Record<string, string | number | boolean | null>;
+  seq: number;
+  type: AgentTraceEventType;
+}
 
 function isAgentSuccessResponse(
   response: AgentResponse,
 ): response is AgentSuccessResponse {
   return "messages" in response && "files" in response;
+}
+
+function getReasoningKey(event: AgentTraceEvent): string | null {
+  const reasoningKey = event.payload?.reasoningKey;
+
+  return typeof reasoningKey === "string" ? reasoningKey : null;
+}
+
+function appendTraceEvent(
+  currentEvents: AgentTraceEvent[],
+  nextEvent: AgentTraceEvent,
+): AgentTraceEvent[] {
+  if (nextEvent.type !== "reasoning") {
+    return [...currentEvents, nextEvent];
+  }
+
+  const reasoningKey = getReasoningKey(nextEvent);
+
+  if (!reasoningKey) {
+    return [...currentEvents, nextEvent];
+  }
+
+  const existingEventIndex = currentEvents.findIndex(
+    (event) =>
+      event.type === "reasoning" && getReasoningKey(event) === reasoningKey,
+  );
+
+  if (existingEventIndex === -1) {
+    return [...currentEvents, nextEvent];
+  }
+
+  return currentEvents.map((event, index) => {
+    if (index !== existingEventIndex) {
+      return event;
+    }
+
+    return {
+      ...event,
+      createdAt: nextEvent.createdAt,
+      message: `${event.message}${nextEvent.message}`,
+    };
+  });
 }
 
 export default function Home() {
@@ -36,6 +87,66 @@ export default function Home() {
   const [files, setFiles] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [traceEvents, setTraceEvents] = useState<AgentTraceEvent[]>([]);
+  const eventSourceRef = useRef<EventSource | null>(null);
+
+  function closeTraceStream() {
+    eventSourceRef.current?.close();
+    eventSourceRef.current = null;
+  }
+
+  useEffect(() => {
+    return () => {
+      eventSourceRef.current?.close();
+      eventSourceRef.current = null;
+    };
+  }, []);
+
+  function openTraceStream(runId: string) {
+    closeTraceStream();
+
+    const eventSource = new EventSource(
+      `/api/agent/events?runId=${encodeURIComponent(runId)}`,
+    );
+    eventSourceRef.current = eventSource;
+
+    function closeCurrentTraceStream() {
+      if (eventSourceRef.current === eventSource) {
+        closeTraceStream();
+        return;
+      }
+
+      eventSource.close();
+    }
+
+    eventSource.onmessage = (messageEvent) => {
+      let traceEvent: AgentTraceEvent;
+
+      try {
+        traceEvent = JSON.parse(messageEvent.data) as AgentTraceEvent;
+      } catch (parseError) {
+        console.error("Failed to parse trace event", { error: parseError });
+        return;
+      }
+
+      setTraceEvents((currentEvents) =>
+        appendTraceEvent(currentEvents, traceEvent),
+      );
+
+      if (
+        (traceEvent.type === "lifecycle" || traceEvent.type === "error") &&
+        traceEvent.payload?.scope === "run" &&
+        (traceEvent.payload?.phase === "completed" ||
+          traceEvent.payload?.phase === "failed")
+      ) {
+        closeCurrentTraceStream();
+      }
+    };
+
+    eventSource.onerror = () => {
+      closeCurrentTraceStream();
+    };
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -43,6 +154,7 @@ export default function Home() {
     setMessages("");
     setFiles([]);
     setError("");
+    setTraceEvents([]);
 
     const trimmedInstructions = instructions.trim();
 
@@ -52,6 +164,8 @@ export default function Home() {
     }
 
     setIsSubmitting(true);
+    const runId = crypto.randomUUID();
+    openTraceStream(runId);
 
     try {
       const response = await fetch("/api/agent", {
@@ -59,7 +173,7 @@ export default function Home() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ instructions: trimmedInstructions }),
+        body: JSON.stringify({ instructions: trimmedInstructions, runId }),
       });
       const data = (await response.json()) as AgentResponse;
 
@@ -67,6 +181,7 @@ export default function Home() {
         setError(
           "error" in data ? data.error : "Unable to process instructions.",
         );
+        closeTraceStream();
         return;
       }
 
@@ -75,6 +190,7 @@ export default function Home() {
     } catch (submitError) {
       console.error("Failed to submit instructions", { error: submitError });
       setError("Unable to process instructions.");
+      closeTraceStream();
     } finally {
       setIsSubmitting(false);
     }
@@ -93,7 +209,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-10 text-slate-950 sm:px-6 lg:px-8">
-      <section className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+      <section className="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <div className="space-y-3">
           <p className="text-sm font-medium uppercase tracking-wide text-slate-500">
             Automation platform
@@ -107,76 +223,117 @@ export default function Home() {
           </p>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Instructions</CardTitle>
-            <CardDescription>
-              Ask for a text response, or request a downloadable text file such
-              as Markdown or CSV.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={handleSubmit}>
-              <Textarea
-                aria-label="Agent instructions"
-                disabled={isSubmitting}
-                onKeyDown={handleInstructionsKeyDown}
-                onChange={(event) => setInstructions(event.target.value)}
-                placeholder="Fetch the latest AI news headlines and write them to a downloadable Markdown file..."
-                value={instructions}
-              />
-              <Button disabled={isSubmitting} type="submit">
-                {isSubmitting ? "Sending..." : "Send instructions"}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Instructions</CardTitle>
+                <CardDescription>
+                  Ask for a text response, or request a downloadable text file
+                  such as Markdown or CSV.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form className="space-y-4" onSubmit={handleSubmit}>
+                  <Textarea
+                    aria-label="Agent instructions"
+                    disabled={isSubmitting}
+                    onKeyDown={handleInstructionsKeyDown}
+                    onChange={(event) => setInstructions(event.target.value)}
+                    placeholder="Fetch the latest AI news headlines and write them to a downloadable Markdown file..."
+                    value={instructions}
+                  />
+                  <Button disabled={isSubmitting} type="submit">
+                    {isSubmitting ? "Sending..." : "Send instructions"}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
 
-        {error ? (
-          <Alert>
-            <AlertTitle>Request failed</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        ) : null}
+            {error ? (
+              <Alert>
+                <AlertTitle>Request failed</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            ) : null}
 
-        {messages ? (
-          <Card>
+            {messages ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Agent response</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <pre className="whitespace-pre-wrap rounded-lg bg-slate-950 p-4 text-sm leading-6 text-white">
+                    {messages}
+                  </pre>
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {files.length > 0 ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Downloads</CardTitle>
+                  <CardDescription>
+                    Files written by the agent for this request.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2">
+                    {files.map((file) => (
+                      <li key={file}>
+                        <a
+                          className="text-sm font-medium text-slate-950 underline underline-offset-4 hover:text-slate-700"
+                          download
+                          href={`/downloads/${encodeURIComponent(file)}`}
+                        >
+                          {file}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            ) : null}
+          </div>
+
+          <Card className="h-fit lg:sticky lg:top-6">
             <CardHeader>
-              <CardTitle>Agent response</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <pre className="whitespace-pre-wrap rounded-lg bg-slate-950 p-4 text-sm leading-6 text-white">
-                {messages}
-              </pre>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {files.length > 0 ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Downloads</CardTitle>
+              <CardTitle>Activity</CardTitle>
               <CardDescription>
-                Files written by the agent for this request.
+                Live trace of lifecycle, tool, and reasoning events.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <ul className="space-y-2">
-                {files.map((file) => (
-                  <li key={file}>
-                    <a
-                      className="text-sm font-medium text-slate-950 underline underline-offset-4 hover:text-slate-700"
-                      download
-                      href={`/downloads/${encodeURIComponent(file)}`}
+              {traceEvents.length > 0 ? (
+                <ol className="space-y-3">
+                  {traceEvents.map((traceEvent) => (
+                    <li
+                      className="rounded-lg border border-slate-200 bg-white p-3"
+                      key={traceEvent.seq}
                     >
-                      {file}
-                    </a>
-                  </li>
-                ))}
-              </ul>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          {traceEvent.type}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          #{traceEvent.seq}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm leading-6 text-slate-700">
+                        {traceEvent.message}
+                      </p>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="text-sm leading-6 text-slate-500">
+                  Submit instructions to watch the automation unfold here.
+                </p>
+              )}
             </CardContent>
           </Card>
-        ) : null}
+        </div>
       </section>
     </main>
   );
