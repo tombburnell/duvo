@@ -3,14 +3,17 @@ import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mkdirMock = vi.hoisted(() => vi.fn());
+const readFileMock = vi.hoisted(() => vi.fn());
 const writeFileMock = vi.hoisted(() => vi.fn());
 
 vi.mock("node:fs/promises", () => ({
   mkdir: mkdirMock,
+  readFile: readFileMock,
   writeFile: writeFileMock,
 }));
 
 import {
+  readDownloadFileContent,
   sanitizeDownloadFilename,
   writeDownloadFile,
 } from "./downloadFiles";
@@ -60,6 +63,23 @@ describe("writeDownloadFile", () => {
     expect(writeFileMock).toHaveBeenCalledWith(
       join(process.cwd(), "public", "downloads", "ai-news.md"),
       "# AI headlines",
+      "utf8",
+    );
+  });
+});
+
+describe("readDownloadFileContent", () => {
+  beforeEach(() => {
+    readFileMock.mockReset();
+  });
+
+  it("reads UTF-8 from downloads after sanitizing the filename", async () => {
+    readFileMock.mockResolvedValueOnce("body");
+
+    await expect(readDownloadFileContent("report.md")).resolves.toBe("body");
+
+    expect(readFileMock).toHaveBeenCalledWith(
+      join(process.cwd(), "public", "downloads", "report.md"),
       "utf8",
     );
   });

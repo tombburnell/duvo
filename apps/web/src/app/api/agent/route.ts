@@ -1,5 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import OpenAI from "openai";
+
+import { evaluateAgentRun } from "@/lib/agent/evaluateAgentRun";
+import { readDownloadFileContent } from "@/lib/agent/downloadFiles";
 import { runInstructions } from "@/lib/agent/runInstructions";
 import { isValidAgentRunId } from "@/lib/agent/traceEvents";
 
@@ -12,6 +16,10 @@ interface AgentRequestBody {
 }
 
 interface AgentSuccessResponse {
+  evaluation?: {
+    justification: string;
+    score: number;
+  };
   files: string[];
   messages: string;
 }
@@ -78,7 +86,37 @@ export async function POST(
       runId,
     });
 
-    return NextResponse.json(result);
+    const apiKey = process.env.OPENAI_API_KEY;
+    const model = process.env.OPENAI_MODEL;
+
+    let evaluation: AgentSuccessResponse["evaluation"];
+
+    if (apiKey && model) {
+      try {
+        const writtenFiles = await Promise.all(
+          result.files.map(async (filename) => ({
+            content: await readDownloadFileContent(filename),
+            filename,
+          })),
+        );
+
+        evaluation = await evaluateAgentRun(new OpenAI({ apiKey }), {
+          finalAnswer: result.messages,
+          model,
+          question: instructions,
+          writtenFiles,
+        });
+      } catch (evaluationError) {
+        console.error("Agent answer evaluation failed", {
+          error: evaluationError,
+        });
+      }
+    }
+
+    return NextResponse.json({
+      ...result,
+      ...(evaluation ? { evaluation } : {}),
+    });
   } catch (error) {
     console.error("Failed to process agent request", { error });
 

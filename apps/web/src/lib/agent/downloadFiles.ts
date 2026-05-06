@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 
 const downloadsDir = join(process.cwd(), "public", "downloads");
@@ -74,4 +74,13 @@ export async function writeDownloadFile({
   await writeFile(join(downloadsDir, canonicalFilename), content, "utf8");
 
   return { filename: canonicalFilename };
+}
+
+/** Read back a file previously written under public/downloads (validates filename). */
+export async function readDownloadFileContent(
+  filename: string,
+): Promise<string> {
+  const canonicalFilename = sanitizeDownloadFilename(filename);
+
+  return readFile(join(downloadsDir, canonicalFilename), "utf8");
 }

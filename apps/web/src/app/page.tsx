@@ -13,7 +13,13 @@ import {
 } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 
+interface AgentEvaluation {
+  justification: string;
+  score: number;
+}
+
 interface AgentSuccessResponse {
+  evaluation?: AgentEvaluation;
   files: string[];
   messages: string;
 }
@@ -85,6 +91,7 @@ export default function Home() {
   const [enableDeepWikiMcp, setEnableDeepWikiMcp] = useState(true);
   const [instructions, setInstructions] = useState("");
   const [messages, setMessages] = useState("");
+  const [evaluation, setEvaluation] = useState<AgentEvaluation | null>(null);
   const [files, setFiles] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -153,6 +160,7 @@ export default function Home() {
     event.preventDefault();
 
     setMessages("");
+    setEvaluation(null);
     setFiles([]);
     setError("");
     setTraceEvents([]);
@@ -192,6 +200,7 @@ export default function Home() {
 
       setMessages(data.messages);
       setFiles(data.files);
+      setEvaluation(data.evaluation ?? null);
     } catch (submitError) {
       console.error("Failed to submit instructions", { error: submitError });
       setError("Unable to process instructions.");
@@ -281,10 +290,21 @@ export default function Home() {
                 <CardHeader>
                   <CardTitle>Agent response</CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
                   <pre className="whitespace-pre-wrap rounded-lg bg-slate-950 p-4 text-sm leading-6 text-white">
                     {messages}
                   </pre>
+                  {evaluation ? (
+                    <div className="rounded-lg border border-slate-200 bg-white p-4">
+                      <p className="text-sm font-semibold text-slate-900">
+                        Usefulness confidence:{" "}
+                        {Math.round(evaluation.score * 100)}%
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        {evaluation.justification}
+                      </p>
+                    </div>
+                  ) : null}
                 </CardContent>
               </Card>
             ) : null}
