@@ -10,7 +10,7 @@ Deliverable: one Next.js page + `POST` API that accepts **user instructions only
 
 ## Phase 1 — Vertical slice: runnable stack + UI + stub agent
 
-_End-to-end path works in the browser; API returns a deterministic stub instead of Anthropic._
+_End-to-end path works in the browser; API returns a deterministic stub instead of OpenAI._
 
 1. **Pick app directory** for the Next app (e.g. repository root or `apps/web`). Every later step assumes this single directory as the Compose bind-mount target.
 2. **Author `docker-compose.local.yml`** at the repo root:
@@ -18,11 +18,11 @@ _End-to-end path works in the browser; API returns a deterministic stub instead 
    2. **No Postgres/Redis app wiring** — no DB/Redis environment variables, services, or `depends_on` entries for this phase.
 3. **Scaffold Next.js** (App Router, TypeScript, Tailwind, ESLint) in the chosen directory.
 4. **Init shadcn/ui** and add **Button**, **Textarea**, **Card**, **Alert** (min set for form + feedback).
-5. **Add `.env.example`** with `ANTHROPIC_API_KEY=` (empty placeholder). Ensure `.env` stays gitignored (repo `.gitignore` already covers `.env`).
+5. **Add `.env.example`** with `OPENAI_API_KEY=` and `OPENAI_MODEL=` (empty placeholders). Ensure `.env` stays gitignored (repo `.gitignore` already covers `.env`).
 6. **Implement Route Handler** `POST /api/agent` (path adjustable—keep client and docs in sync):
    1. Parse JSON `{ instructions: string }`.
    2. Reject empty/missing `instructions` with **400** and stable error shape.
-   3. Return **200** with `{ reply: string }` using a **stub** (e.g. echo prefix or fixed string) — **no** Claude Agents SDK dependency in Phase 1 yet.
+   3. Return **200** with `{ reply: string }` using a **stub** (e.g. echo prefix or fixed string) — **no** OpenAI SDK dependency in Phase 1 yet.
 7. **Implement client page** (default route **`/`** unless you prefer `/agent`): shadcn textarea + submit; loading state; `fetch` POST to `/api/agent`; show **reply** or **Alert** on error.
 8. **Run**: `docker compose -f docker-compose.local.yml up` (add `--build` first time if Dockerfile/build step exists). Manual smoke: submit text → see stub reply.
 
@@ -30,14 +30,14 @@ _End-to-end path works in the browser; API returns a deterministic stub instead 
 
 ---
 
-## Phase 2 — Vertical slice: real Claude Agents SDK + hardening
+## Phase 2 — Vertical slice: real OpenAI SDK + hardening
 
-_Same URLs and UI; backend calls Anthropic via SDK with **user-only** payload._
+_Same URLs and UI; backend calls OpenAI via SDK with **user-only** payload._
 
-1. **Add Claude Agents SDK** dependency per Anthropic docs; ensure Route Handler uses **Node** runtime (not Edge) if the SDK requires Node APIs.
+1. **Add OpenAI SDK** dependency; ensure Route Handler uses **Node** runtime (not Edge).
 2. **Implement `runInstructions`** (or equivalent module): accept trimmed user string; invoke SDK with **no separate system prompt** in v1 (SDK defaults only unless docs require explicit minimal args—keep behavior “user payload only”).
 3. **Wire Route Handler** to call `runInstructions` instead of stub; map failures to **safe** HTTP responses (no stack traces or key material to client) per `spec.md` AC3.
-4. **Validate secrets**: `ANTHROPIC_API_KEY` read server-side only; confirm no `NEXT_PUBLIC_` Anthropic vars.
+4. **Validate secrets**: `OPENAI_API_KEY` and `OPENAI_MODEL` read server-side only; confirm no `NEXT_PUBLIC_` OpenAI vars.
 5. **Tests:** handler/unit coverage for **400** on bad body; optional test for thrown SDK error → stable **5xx** body (mock SDK).
 6. **Docs:** README snippet — copy `.env.example` → `.env`, run Compose command, open page URL.
 

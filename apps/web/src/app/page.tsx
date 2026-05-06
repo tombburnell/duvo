@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, KeyboardEvent, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -76,6 +76,17 @@ export default function Home() {
     }
   }
 
+  function handleInstructionsKeyDown(
+    event: KeyboardEvent<HTMLTextAreaElement>,
+  ) {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
+      return;
+    }
+
+    event.preventDefault();
+    event.currentTarget.form?.requestSubmit();
+  }
+
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-10 text-slate-950 sm:px-6 lg:px-8">
       <section className="mx-auto flex w-full max-w-3xl flex-col gap-6">
@@ -87,8 +98,8 @@ export default function Home() {
             Send instructions to an agent
           </h1>
           <p className="max-w-2xl text-slate-600">
-            Phase 1 uses a local stub so the full UI and API path can be tested
-            before wiring the Claude Agents SDK.
+            Submit one set of instructions and receive one response from the
+            OpenAI SDK.
           </p>
         </div>
 
@@ -104,6 +115,7 @@ export default function Home() {
               <Textarea
                 aria-label="Agent instructions"
                 disabled={isSubmitting}
+                onKeyDown={handleInstructionsKeyDown}
                 onChange={(event) => setInstructions(event.target.value)}
                 placeholder="Summarise the current automation goal and return the next best action..."
                 value={instructions}

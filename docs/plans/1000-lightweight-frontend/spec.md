@@ -3,7 +3,7 @@
 ## 1. Summary
 
 1. Add a minimal UI plus server integration so operators can submit **one** instruction block to an agentic backend and read the **single** consolidated reply.
-2. Integration **must** use the official **Claude Agents SDK** ([overview](https://platform.claude.com/docs/en/agent-sdk/overview)); Anthropic API credentials are provided out-of-band (e.g. 1Password).
+2. Integration **must** use the official **OpenAI SDK**; OpenAI credentials and model are provided via `.env`.
 3. Scope is intentionally tiny (~10 min implementation slot in a larger block); polish and productization are out of scope unless explicitly expanded later. **Authentication is not required** for this ticket (see §7–§8).
 
 ## 2. Goals
@@ -15,7 +15,7 @@
 ### 2.1 Non-functional requirements
 
 1. **TypeScript:** All code added or changed for this feature is TypeScript, compiled under the repo’s strict TS settings (`npm run tsc` / package equivalents).
-2. **Claude Agents SDK:** Agent calls are implemented only via the **Claude Agents SDK** (no alternate agent clients or raw REST substitutes for this ticket unless the SDK is officially deprecated—then escalate).
+2. **OpenAI SDK:** Agent calls are implemented only via the **OpenAI SDK** using `OPENAI_API_KEY` and `OPENAI_MODEL`.
 
 ## 3. Non-Goals
 
@@ -30,7 +30,7 @@
 ### UC1 — Submit instructions and view reply
 
 1. **Actor:** Internal operator / developer testing the automation platform.
-2. **Preconditions:** Valid Anthropic API key configured in server environment for the Claude Agents SDK; dev server running.
+2. **Preconditions:** Valid OpenAI API key and model configured in server environment; dev server running.
 3. **Flow**
    1. User opens the lightweight frontend page.
    2. User pastes or types a single block of instructions.
@@ -47,22 +47,22 @@
 | AC3   | Errors from the provider (network, auth, rate limit) surface as user-visible, non-leaking messages. | P1 |
 | AC4   | Typecheck/lint for touched packages passes per project norms.            | P1       |
 | AC5   | Implementation uses TypeScript only (no new plain JS for this feature).   | P0       |
-| AC6   | Agent invocation goes through the Claude Agents SDK (server-side).       | P0       |
+| AC6   | Agent invocation goes through the OpenAI SDK (server-side).              | P0       |
 
 ## 6. Scope
 
 ### 6.1 In Scope
 
 1. One UI surface (e.g. textarea + submit + result panel).
-2. One backend endpoint or server action that invokes the **Claude Agents SDK** (or thin typed wrapper around it).
+2. One backend endpoint or server action that invokes the **OpenAI SDK** (or thin typed wrapper around it).
 3. Configuration via environment variable(s) documented for local dev (no committed secrets).
 4. **`docker-compose.local.yml`** for local development with the app process only for this phase; no Postgres/Redis app wiring is needed yet.
 
 ### 6.2 Out of Scope
 
 1. Application use of databases, queues, Redis, or workflow orchestration **for this agent call**.
-2. Automated E2E against live Anthropic API in CI (manual smoke acceptable for spike).
-3. Replacing the Claude Agents SDK with another client for this ticket.
+2. Automated E2E against live OpenAI API in CI (manual smoke acceptable for spike).
+3. Replacing the OpenAI SDK with another client for this ticket.
 
 ## 7. Open Questions
 
@@ -77,8 +77,8 @@ All items below were **resolved** for this ticket; none block implementation.
 ## 8. Decisions
 
 1. **Language:** **TypeScript** for all implementation touching this feature (see §2.1).
-2. **Agent runtime:** **Claude Agents SDK** only—matches platform direction and supplied Anthropic credentials (see §2.1). *Date: TBD.*
-3. **Key handling:** Use server-side env var (e.g. `ANTHROPIC_API_KEY`); load from **`.env`** (gitignored); document in `.env.example` or README only—never client exposure.
+2. **Agent runtime:** **OpenAI SDK** only—matches the updated platform direction (see §2.1). *Date: TBD.*
+3. **Key handling:** Use server-side env vars `OPENAI_API_KEY` and `OPENAI_MODEL`; load from **`.env`** (gitignored); document in `.env.example` or README only—never client exposure.
 4. **Local orchestration:** **`docker-compose.local.yml`** per §7 table and the docker-compose-local skill.
 5. **Security posture for this spike:** No app-level authentication; still do not log secrets or leak keys to the client (see §13).
 6. **Agent input:** Request body carries **end-user instructions only**; no mandatory system prompt in scope for v1.
@@ -92,7 +92,7 @@ All items below were **resolved** for this ticket; none block implementation.
 
 ## 10. High-Level Technical Approach
 
-1. Add a server route (or equivalent) that accepts a JSON body `{ instructions: string }` (**user payload only** for v1), validates non-empty input, and calls the **Claude Agents SDK** with project-agreed model/options (system layer optional later).
+1. Add a server route (or equivalent) that accepts a JSON body `{ instructions: string }` (**user payload only** for v1), validates non-empty input, and calls the **OpenAI SDK** with `OPENAI_MODEL` (system layer optional later).
 2. Add a minimal client page that POSTs to that route and renders plaintext/markdown-safe response.
 3. Document required env vars and local run steps.
 
@@ -121,7 +121,7 @@ All items below were **resolved** for this ticket; none block implementation.
 
 ## 14. Dependencies
 
-1. **External:** Anthropic API accessed **only** through the **Claude Agents SDK** package named in Anthropic’s current docs (pin version in `package.json`).
+1. **External:** OpenAI API accessed **only** through the official **OpenAI SDK** package pinned in `package.json`.
 2. **Internal:** Next.js + Tailwind + shadcn per `approach.md`; local run via **`docker-compose.local.yml`** (docker-compose-local skill).
 
 ## 15. Pattern alignment checklist

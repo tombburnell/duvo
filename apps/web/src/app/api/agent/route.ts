@@ -1,5 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { runInstructions } from "@/lib/agent/runInstructions";
+
+export const runtime = "nodejs";
+
 interface AgentRequestBody {
   instructions: string;
 }
@@ -23,34 +27,45 @@ function isAgentRequestBody(value: unknown): value is AgentRequestBody {
 export async function POST(
   request: NextRequest,
 ): Promise<NextResponse<AgentSuccessResponse | AgentErrorResponse>> {
+  let body: unknown;
+
   try {
-    const body: unknown = await request.json();
+    body = await request.json();
+  } catch (error) {
+    console.error("Failed to parse agent request body", { error });
 
-    if (!isAgentRequestBody(body)) {
-      return NextResponse.json(
-        { error: "Instructions are required." },
-        { status: 400 },
-      );
-    }
+    return NextResponse.json(
+      { error: "Instructions are required." },
+      { status: 400 },
+    );
+  }
 
-    const instructions = body.instructions.trim();
+  if (!isAgentRequestBody(body)) {
+    return NextResponse.json(
+      { error: "Instructions are required." },
+      { status: 400 },
+    );
+  }
 
-    if (!instructions) {
-      return NextResponse.json(
-        { error: "Instructions are required." },
-        { status: 400 },
-      );
-    }
+  const instructions = body.instructions.trim();
 
-    return NextResponse.json({
-      reply: `Phase 1 stub response received your instructions:\n\n${instructions}`,
-    });
+  if (!instructions) {
+    return NextResponse.json(
+      { error: "Instructions are required." },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const reply = await runInstructions(instructions);
+
+    return NextResponse.json({ reply });
   } catch (error) {
     console.error("Failed to process agent request", { error });
 
     return NextResponse.json(
       { error: "Unable to process instructions." },
-      { status: 400 },
+      { status: 502 },
     );
   }
 }

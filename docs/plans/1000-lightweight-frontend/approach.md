@@ -4,9 +4,9 @@
 
 **Key decisions**:
 
-- **Next.js (App Router)** for one page + one server API route—SDK and `ANTHROPIC_API_KEY` stay on the server by default.
+- **Next.js (App Router)** for one page + one server API route—SDK and `OPENAI_API_KEY` stay on the server by default.
 - **Tailwind CSS** for layout/spacing; **shadcn/ui** for textarea, button, card, and loading/error affordances without bespoke CSS.
-- **Claude Agents SDK** invoked only from a **Route Handler** (`app/api/.../route.ts`) or Server Action—never from client components.
+- **OpenAI SDK** invoked only from a **Route Handler** (`app/api/.../route.ts`) or Server Action—never from client components.
 
 **Open questions**:
 
@@ -18,7 +18,7 @@
 
 - Happy path: instructions submitted → visible agent reply typically under 30s (network/model dependent).
 - `npm run tsc` (and project lint) clean for touched code.
-- No Anthropic secret in client bundle (verify with build inspect or grep `process.env` usage in `"use client"` trees).
+- No OpenAI secret in client bundle (verify with build inspect or grep `process.env` usage in `"use client"` trees).
 
 ## Table of Contents
 
@@ -41,7 +41,7 @@
 | Components | **shadcn/ui** | Accessible primitives; copy-in components | Requires `components.json` + cn helper setup once | ✅ **Use** |
 | Agent call site | **Route Handler** (`POST` JSON) | Explicit boundary; easy to curl; clear “no SDK in client” | Slightly more boilerplate than Server Action alone | ✅ **Recommended** (Server Action acceptable if team prefers) |
 
-**Environment**: Load `ANTHROPIC_API_KEY` from `.env` (gitignored per repo `.gitignore`); Next reads via `process.env` on server only—do not prefix with `NEXT_PUBLIC_`.
+**Environment**: Load `OPENAI_API_KEY` and `OPENAI_MODEL` from `.env` (gitignored per repo `.gitignore`); Next reads via `process.env` on server only—do not prefix with `NEXT_PUBLIC_`.
 
 ## Architecture patterns to reuse
 
@@ -54,7 +54,7 @@
 1. Add **`docker-compose.local.yml`** for the **Next dev** app service (`env_file`, bind mount, anonymous `node_modules` volume, `npm run dev`). Do not add Postgres/Redis services or app wiring for this phase.
 2. `create-next-app` with TypeScript, Tailwind, App Router, ESLint (inside the bind-mounted app directory the compose file expects).
 3. Initialize shadcn (`npx shadcn@latest init`) then add **Button**, **Textarea**, **Card** (and **Alert** if useful).
-4. Thin **Route Handler**: parse JSON → validate → call small **service module** (`lib/agent/runInstructions.ts` or similar) that wraps the **Claude Agents SDK** → return `{ reply: string }` or typed error. **v1:** pass **user instructions only** into the SDK entrypoint; leave hooks/constants ready if product adds **system** prompt later.
+4. Thin **Route Handler**: parse JSON → validate → call small **service module** (`lib/agent/runInstructions.ts` or similar) that wraps the **OpenAI SDK** → return `{ reply: string }` or typed error. **v1:** pass **user instructions only** into the SDK entrypoint; leave hooks/constants ready if product adds **system** prompt later.
 
 **Alignment**: Matches `spec.md` and `AGENTS.md` intent—router thin, orchestration in a typed helper—within Next’s single-process model.
 
@@ -67,7 +67,7 @@ Browser (Client Component)
 Route Handler  app/api/agent/route.ts
   │  validate body
   ▼
-lib/agent/runInstructions.ts  →  Claude Agents SDK  →  Anthropic API
+lib/agent/runInstructions.ts  →  OpenAI SDK  →  OpenAI API
   │
   ▼
 JSON response { reply } or 4xx/5xx + safe message
@@ -82,7 +82,7 @@ JSON response { reply } or 4xx/5xx + safe message
 | Route Handler | Empty/missing `instructions` → 400 | Should have |
 | Route Handler | SDK throws → 502 + generic body (no stack/key in response) | Should have |
 
-Integration tests against **live** Anthropic API are **out of scope** for this spike (`spec.md` §6.2).
+Integration tests against **live** OpenAI API are **out of scope** for this spike (`spec.md` §6.2).
 
 ### Manual smoke
 
@@ -107,7 +107,7 @@ _No blocking questions._ Minor: choose default page path `/` vs `/agent` when cr
 
 ### Critical risks
 
-**SDK only runs in Node**: If Claude Agents SDK assumes Node APIs, avoid Edge runtime for the Route Handler—use **Node** runtime default.
+**SDK only runs in Node**: Use the Route Handler's **Node** runtime so the OpenAI SDK and server environment stay isolated from the client bundle.
 
 **Accidental client bundle**: Mitigate by keeping SDK imports out of `"use client"` files and code-reviewing dynamic imports.
 

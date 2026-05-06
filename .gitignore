@@ -1,4 +1,4 @@
-# Local environment — never commit secrets (e.g. ANTHROPIC_API_KEY)
+# Local environment — never commit secrets (e.g. OPENAI_API_KEY)
 .env
 .env.*
 !.env.example
