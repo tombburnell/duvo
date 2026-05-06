@@ -21,6 +21,7 @@ export interface AgentRunResult {
 }
 
 export interface AgentRunOptions {
+  enableDeepWikiMcp?: boolean;
   runId?: string;
 }
 
@@ -39,8 +40,17 @@ interface OpenAIStreamTraceState {
   reasoningKeys: Map<string, string>;
 }
 
+interface RemoteMcpTool {
+  require_approval: "never";
+  server_label: string;
+  server_url: string;
+  type: "mcp";
+}
+
 const AGENT_INSTRUCTIONS =
   "Always produce a final user-facing answer in the assistant final message/output_text. Do not leave the answer only in reasoning, tool calls, or tool results. For simple questions, answer directly in that final message. When the user asks for a downloadable document, use write_document with a clear user-friendly filename and appropriate text extension, then still include a concise final user-facing message that mentions any files created. For current AI news requests, use the built-in web search tool to find recent headlines before writing or answering.";
+const DEEPWIKI_MCP_SERVER_LABEL = "deepwiki";
+const DEEPWIKI_MCP_SERVER_URL = "https://mcp.deepwiki.com/mcp";
 
 interface ResponseOutputItemLog {
   contentTypes?: string[];
@@ -394,11 +404,54 @@ function hasHostedToolActivity(response: Response): boolean {
     }
 
     return [
+      "mcp_call",
+      "mcp_list_tools",
       "web_search_call",
       "file_search_call",
       "code_interpreter_call",
     ].includes(item.type);
   });
+}
+
+function publishDeepWikiMcpCallEvents(
+  response: Response,
+  options: AgentRunOptions & { round: number },
+): void {
+  for (const item of response.output) {
+    if (
+      !isRecord(item) ||
+      item.type !== "mcp_call" ||
+      getStringProperty(item, "server_label") !== DEEPWIKI_MCP_SERVER_LABEL
+    ) {
+      continue;
+    }
+
+    const toolName = getStringProperty(item, "name") ?? "unknown_tool";
+    const status = getStringProperty(item, "status");
+    const hasError = typeof item.error === "string" && item.error.length > 0;
+    const failed = hasError || status === "failed";
+
+    publishAgentTraceEvent(options.runId, {
+      message: `DeepWiki MCP started: ${toolName}.`,
+      payload: {
+        phase: "started",
+        round: options.round,
+        serverLabel: DEEPWIKI_MCP_SERVER_LABEL,
+        toolName,
+      },
+      type: "tool",
+    });
+    publishAgentTraceEvent(options.runId, {
+      message: `DeepWiki MCP ${failed ? "failed" : "completed"}: ${toolName}.`,
+      payload: {
+        phase: failed ? "failed" : "completed",
+        round: options.round,
+        serverLabel: DEEPWIKI_MCP_SERVER_LABEL,
+        toolName,
+      },
+      type: failed ? "error" : "tool",
+    });
+  }
 }
 
 function getResponseId(response: Response): string {
@@ -610,6 +663,7 @@ async function createResponseWithTrace(
   }
 
   const response = await stream.finalResponse();
+  publishDeepWikiMcpCallEvents(response, options);
 
   debugPayload("OpenAI response debug payload", {
     response,
@@ -624,6 +678,51 @@ async function createResponseWithTrace(
   });
 
   return response;
+}
+
+function getAgentTools(enableDeepWikiMcp: boolean): Tool[] {
+  const tools: Tool[] = [
+    {
+      type: "web_search_preview",
+    },
+  ];
+
+  if (enableDeepWikiMcp) {
+    const deepWikiMcpTool: RemoteMcpTool = {
+      require_approval: "never",
+      server_label: DEEPWIKI_MCP_SERVER_LABEL,
+      server_url: DEEPWIKI_MCP_SERVER_URL,
+      type: "mcp",
+    };
+
+    tools.push(deepWikiMcpTool as Tool);
+  }
+
+  tools.push({
+    type: "function",
+    name: "write_document",
+    description:
+      "Write a UTF-8 text document to public downloads and return the canonical filename.",
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        content: {
+          type: "string",
+          description: "The complete UTF-8 text content to write.",
+        },
+        filename: {
+          type: "string",
+          description:
+            "User-friendly filename with a text extension such as .txt, .md, or .csv.",
+        },
+      },
+      required: ["filename", "content"],
+    },
+    strict: true,
+  });
+
+  return tools;
 }
 
 export async function runInstructions(
@@ -681,34 +780,7 @@ export async function runInstructions(
   const openai = new OpenAI({ apiKey });
   const files = new Set<string>();
   const reasoning = getReasoningConfig(model);
-  const tools: Tool[] = [
-    {
-      type: "web_search_preview",
-    },
-    {
-      type: "function",
-      name: "write_document",
-      description:
-        "Write a UTF-8 text document to public downloads and return the canonical filename.",
-      parameters: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          content: {
-            type: "string",
-            description: "The complete UTF-8 text content to write.",
-          },
-          filename: {
-            type: "string",
-            description:
-              "User-friendly filename with a text extension such as .txt, .md, or .csv.",
-          },
-        },
-        required: ["filename", "content"],
-      },
-      strict: true,
-    },
-  ];
+  const tools = getAgentTools(options.enableDeepWikiMcp === true);
 
   try {
     let response = await createResponseWithTrace(

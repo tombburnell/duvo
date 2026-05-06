@@ -6,6 +6,7 @@ import { isValidAgentRunId } from "@/lib/agent/traceEvents";
 export const runtime = "nodejs";
 
 interface AgentRequestBody {
+  enableDeepWikiMcp?: boolean;
   instructions: string;
   runId?: string;
 }
@@ -28,6 +29,8 @@ function isAgentRequestBody(value: unknown): value is AgentRequestBody {
 
   return (
     typeof candidate.instructions === "string" &&
+    (candidate.enableDeepWikiMcp === undefined ||
+      typeof candidate.enableDeepWikiMcp === "boolean") &&
     (candidate.runId === undefined || typeof candidate.runId === "string")
   );
 }
@@ -70,7 +73,10 @@ export async function POST(
   }
 
   try {
-    const result = await runInstructions(instructions, { runId });
+    const result = await runInstructions(instructions, {
+      enableDeepWikiMcp: body.enableDeepWikiMcp === true,
+      runId,
+    });
 
     return NextResponse.json(result);
   } catch (error) {

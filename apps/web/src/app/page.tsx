@@ -82,6 +82,7 @@ function appendTraceEvent(
 }
 
 export default function Home() {
+  const [enableDeepWikiMcp, setEnableDeepWikiMcp] = useState(true);
   const [instructions, setInstructions] = useState("");
   const [messages, setMessages] = useState("");
   const [files, setFiles] = useState<string[]>([]);
@@ -173,7 +174,11 @@ export default function Home() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ instructions: trimmedInstructions, runId }),
+        body: JSON.stringify({
+          enableDeepWikiMcp,
+          instructions: trimmedInstructions,
+          runId,
+        }),
       });
       const data = (await response.json()) as AgentResponse;
 
@@ -243,6 +248,20 @@ export default function Home() {
                     placeholder="Fetch the latest AI news headlines and write them to a downloadable Markdown file..."
                     value={instructions}
                   />
+                  <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-700">
+                    <input
+                      checked={enableDeepWikiMcp}
+                      className="mt-1 h-4 w-4 rounded border-slate-300"
+                      disabled={isSubmitting}
+                      onChange={(event) =>
+                        setEnableDeepWikiMcp(event.target.checked)
+                      }
+                      type="checkbox"
+                    />
+                    <span>
+                      Allow the agent to use the DeepWiki public MCP server.
+                    </span>
+                  </label>
                   <Button disabled={isSubmitting} type="submit">
                     {isSubmitting ? "Sending..." : "Send instructions"}
                   </Button>
