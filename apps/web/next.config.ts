@@ -23,8 +23,6 @@ function findEnvDir(startDir: string): string {
 
 loadEnvConfig(findEnvDir(process.cwd()));
 
-const nextConfig: NextConfig = {
-  /* config options here */
-};
+const nextConfig: NextConfig = {};
 
 export default nextConfig;

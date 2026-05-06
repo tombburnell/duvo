@@ -11,6 +11,14 @@ RUN if [ ! -f package-lock.json ]; then \
 fi
 RUN npm ci
 
+FROM base AS prod-deps
+COPY package.json package-lock.json ./
+RUN if [ ! -f package-lock.json ]; then \
+  echo >&2 "ERROR: ./package-lock.json missing in build context."; \
+  exit 1; \
+fi
+RUN npm ci --omit=dev
+
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -25,11 +33,12 @@ ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 
+COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
+COPY --chown=node:node package.json package-lock.json ./
 COPY --from=builder --chown=node:node /app/public ./public
-COPY --from=builder --chown=node:node /app/.next/standalone ./
-COPY --from=builder --chown=node:node /app/.next/static ./.next/static
+COPY --from=builder --chown=node:node /app/.next ./.next
 
 USER node
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+CMD ["npm", "run", "start"]
