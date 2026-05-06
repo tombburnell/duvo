@@ -52,6 +52,12 @@ const AGENT_INSTRUCTIONS =
 const DEEPWIKI_MCP_SERVER_LABEL = "deepwiki";
 const DEEPWIKI_MCP_SERVER_URL = "https://mcp.deepwiki.com/mcp";
 
+// [ {
+//   name: "deepwiki",
+//   url: "https://mcp.deepwiki.com/mcp",
+// }]
+
+
 interface ResponseOutputItemLog {
   contentTypes?: string[];
   id?: string;
@@ -172,25 +178,25 @@ function summarizeResponseOutputItem(item: unknown): ResponseOutputItemLog {
 function summarizeResponseForLog(response: Response): ResponseLogSummary {
   const usage = isRecord(response.usage)
     ? {
-        inputTokens:
-          typeof response.usage.input_tokens === "number"
-            ? response.usage.input_tokens
-            : undefined,
-        outputTokens:
-          typeof response.usage.output_tokens === "number"
-            ? response.usage.output_tokens
-            : undefined,
-        reasoningTokens:
-          isRecord(response.usage.output_tokens_details) &&
+      inputTokens:
+        typeof response.usage.input_tokens === "number"
+          ? response.usage.input_tokens
+          : undefined,
+      outputTokens:
+        typeof response.usage.output_tokens === "number"
+          ? response.usage.output_tokens
+          : undefined,
+      reasoningTokens:
+        isRecord(response.usage.output_tokens_details) &&
           typeof response.usage.output_tokens_details.reasoning_tokens ===
-            "number"
-            ? response.usage.output_tokens_details.reasoning_tokens
-            : undefined,
-        totalTokens:
-          typeof response.usage.total_tokens === "number"
-            ? response.usage.total_tokens
-            : undefined,
-      }
+          "number"
+          ? response.usage.output_tokens_details.reasoning_tokens
+          : undefined,
+      totalTokens:
+        typeof response.usage.total_tokens === "number"
+          ? response.usage.total_tokens
+          : undefined,
+    }
     : undefined;
 
   return {
@@ -251,7 +257,7 @@ async function handleFunctionCall(
   functionCall: FunctionCall,
   options: AgentRunOptions,
 ): Promise<{ output: string; writtenFilename: string | null }> {
-    debugPayload("Agent function call debug payload", {
+  debugPayload("Agent function call debug payload", {
     arguments: functionCall.arguments,
     callId: functionCall.callId,
     runId: options.runId,
@@ -368,8 +374,8 @@ function getReasoningSourceKey(
     ResponseStreamEvent,
     {
       type:
-        | "response.reasoning_text.delta"
-        | "response.reasoning_summary_text.delta";
+      | "response.reasoning_text.delta"
+      | "response.reasoning_summary_text.delta";
     }
   >,
   round: number,
