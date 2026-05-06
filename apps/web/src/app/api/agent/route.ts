@@ -9,7 +9,8 @@ interface AgentRequestBody {
 }
 
 interface AgentSuccessResponse {
-  reply: string;
+  files: string[];
+  messages: string;
 }
 
 interface AgentErrorResponse {
@@ -57,9 +58,9 @@ export async function POST(
   }
 
   try {
-    const reply = await runInstructions(instructions);
+    const result = await runInstructions(instructions);
 
-    return NextResponse.json({ reply });
+    return NextResponse.json(result);
   } catch (error) {
     console.error("Failed to process agent request", { error });
 

@@ -14,7 +14,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 
 interface AgentSuccessResponse {
-  reply: string;
+  files: string[];
+  messages: string;
 }
 
 interface AgentErrorResponse {
@@ -26,19 +27,21 @@ type AgentResponse = AgentSuccessResponse | AgentErrorResponse;
 function isAgentSuccessResponse(
   response: AgentResponse,
 ): response is AgentSuccessResponse {
-  return "reply" in response;
+  return "messages" in response && "files" in response;
 }
 
 export default function Home() {
   const [instructions, setInstructions] = useState("");
-  const [reply, setReply] = useState("");
+  const [messages, setMessages] = useState("");
+  const [files, setFiles] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    setReply("");
+    setMessages("");
+    setFiles([]);
     setError("");
 
     const trimmedInstructions = instructions.trim();
@@ -67,7 +70,8 @@ export default function Home() {
         return;
       }
 
-      setReply(data.reply);
+      setMessages(data.messages);
+      setFiles(data.files);
     } catch (submitError) {
       console.error("Failed to submit instructions", { error: submitError });
       setError("Unable to process instructions.");
@@ -98,8 +102,8 @@ export default function Home() {
             Send instructions to an agent
           </h1>
           <p className="max-w-2xl text-slate-600">
-            Submit one set of instructions and receive one response from the
-            OpenAI SDK.
+            Submit instructions and receive an agent response with optional
+            downloadable text files.
           </p>
         </div>
 
@@ -107,7 +111,8 @@ export default function Home() {
           <CardHeader>
             <CardTitle>Instructions</CardTitle>
             <CardDescription>
-              Enter one set of instructions and submit to receive one response.
+              Ask for a text response, or request a downloadable text file such
+              as Markdown or CSV.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -117,7 +122,7 @@ export default function Home() {
                 disabled={isSubmitting}
                 onKeyDown={handleInstructionsKeyDown}
                 onChange={(event) => setInstructions(event.target.value)}
-                placeholder="Summarise the current automation goal and return the next best action..."
+                placeholder="Fetch the latest AI news headlines and write them to a downloadable Markdown file..."
                 value={instructions}
               />
               <Button disabled={isSubmitting} type="submit">
@@ -134,15 +139,41 @@ export default function Home() {
           </Alert>
         ) : null}
 
-        {reply ? (
+        {messages ? (
           <Card>
             <CardHeader>
               <CardTitle>Agent response</CardTitle>
             </CardHeader>
             <CardContent>
               <pre className="whitespace-pre-wrap rounded-lg bg-slate-950 p-4 text-sm leading-6 text-white">
-                {reply}
+                {messages}
               </pre>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {files.length > 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Downloads</CardTitle>
+              <CardDescription>
+                Files written by the agent for this request.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2">
+                {files.map((file) => (
+                  <li key={file}>
+                    <a
+                      className="text-sm font-medium text-slate-950 underline underline-offset-4 hover:text-slate-700"
+                      download
+                      href={`/downloads/${encodeURIComponent(file)}`}
+                    >
+                      {file}
+                    </a>
+                  </li>
+                ))}
+              </ul>
             </CardContent>
           </Card>
         ) : null}
