@@ -13,6 +13,7 @@ vi.mock("node:fs/promises", () => ({
 }));
 
 import {
+  downloadsDir,
   readDownloadFileContent,
   sanitizeDownloadFilename,
   writeDownloadFile,
@@ -57,11 +58,11 @@ describe("writeDownloadFile", () => {
     ).resolves.toEqual({ filename: "ai-news.md" });
 
     expect(mkdirMock).toHaveBeenCalledWith(
-      join(process.cwd(), "public", "downloads"),
+      downloadsDir,
       { recursive: true },
     );
     expect(writeFileMock).toHaveBeenCalledWith(
-      join(process.cwd(), "public", "downloads", "ai-news.md"),
+      join(downloadsDir, "ai-news.md"),
       "# AI headlines",
       "utf8",
     );
@@ -79,7 +80,7 @@ describe("readDownloadFileContent", () => {
     await expect(readDownloadFileContent("report.md")).resolves.toBe("body");
 
     expect(readFileMock).toHaveBeenCalledWith(
-      join(process.cwd(), "public", "downloads", "report.md"),
+      join(downloadsDir, "report.md"),
       "utf8",
     );
   });

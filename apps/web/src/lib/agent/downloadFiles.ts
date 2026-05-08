@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 
-const downloadsDir = join(process.cwd(), "public", "downloads");
+export const downloadsDir = "/tmp/downloads";
 const maxFilenameLength = 128;
 const maxFileBytes = 500_000;
 const allowedTextExtensions = new Set([
@@ -76,7 +76,7 @@ export async function writeDownloadFile({
   return { filename: canonicalFilename };
 }
 
-/** Read back a file previously written under public/downloads (validates filename). */
+/** Read back a previously written download file (validates filename). */
 export async function readDownloadFileContent(
   filename: string,
 ): Promise<string> {
